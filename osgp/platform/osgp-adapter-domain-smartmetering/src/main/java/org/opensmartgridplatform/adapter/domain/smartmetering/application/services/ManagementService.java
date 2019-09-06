@@ -7,34 +7,26 @@
  */
 package org.opensmartgridplatform.adapter.domain.smartmetering.application.services;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import org.opensmartgridplatform.adapter.domain.smartmetering.application.mapping.ManagementMapper;
 import org.opensmartgridplatform.adapter.domain.smartmetering.infra.jms.core.OsgpCoreRequestMessageSender;
 import org.opensmartgridplatform.adapter.domain.smartmetering.infra.jms.ws.WebServiceResponseMessageSender;
 import org.opensmartgridplatform.domain.core.entities.SmartMeter;
 import org.opensmartgridplatform.domain.core.repositories.SmartMeterRepository;
 import org.opensmartgridplatform.domain.core.valueobjects.DeviceLifecycleStatus;
-import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.EventMessagesResponse;
-import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.FindEventsRequestDataList;
-import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.SetDeviceLifecycleStatusByChannelRequestData;
-import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.SetDeviceLifecycleStatusByChannelResponseData;
-import org.opensmartgridplatform.dto.valueobjects.smartmetering.EventMessageDataResponseDto;
-import org.opensmartgridplatform.dto.valueobjects.smartmetering.FindEventsRequestList;
-import org.opensmartgridplatform.dto.valueobjects.smartmetering.SetDeviceCommunicationSettingsRequestDto;
-import org.opensmartgridplatform.dto.valueobjects.smartmetering.SetDeviceLifecycleStatusByChannelRequestDataDto;
-import org.opensmartgridplatform.dto.valueobjects.smartmetering.SetDeviceLifecycleStatusByChannelResponseDto;
+import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.*;
+import org.opensmartgridplatform.dto.valueobjects.smartmetering.*;
 import org.opensmartgridplatform.shared.exceptionhandling.FunctionalException;
 import org.opensmartgridplatform.shared.exceptionhandling.OsgpException;
 import org.opensmartgridplatform.shared.infra.jms.DeviceMessageMetadata;
 import org.opensmartgridplatform.shared.infra.jms.RequestMessage;
 import org.opensmartgridplatform.shared.infra.jms.ResponseMessage;
 import org.opensmartgridplatform.shared.infra.jms.ResponseMessageResultType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service(value = "domainSmartMeteringManagementService")
 @Transactional(value = "transactionManager")
@@ -210,18 +202,54 @@ public class ManagementService {
         this.smartMeterRepository.save(mbusDevice);
     }
 
-    public void setDeviceLifecycleStatus(final SetDeviceLifecycleStatusResponseDto responseDto) {
+    public void setDeviceLifecycleStatus(final DeviceMessageMetadata deviceMessageMetadata,
+                                                  final SetDeviceLifecycleStatusRequestData request) throws FunctionalException {
 
-        final SmartMeter device = responseDto.getDeviceIdentification();
-        device.setDeviceLifecycleStatus(DeviceLifecycleStatus.valueOf(responseDto.getDeviceLifecycleStatus().name()));
-        this.smartMeterRepository.save(device);
-    }
-
-    public void disableDebugging(final DeviceMessageMetadata deviceMessageMetadata) throws FunctionalException {
-        LOGGER.info("DisableDebugging for organisationIdentification: {} for deviceIdentification: {}",
+        LOGGER.info("Set device communication settings for organisationIdentification: {} for deviceIdentification: {}",
                 deviceMessageMetadata.getOrganisationIdentification(), deviceMessageMetadata.getDeviceIdentification());
 
-        this.sendMetadataOnlyRequestMessage(deviceMessageMetadata);
+        final SetDeviceLifecycleStatusRequestDataDto requestDto = this.managementMapper.map(request,
+                SetDeviceLifecycleStatusRequestDataDto.class);
+        final SmartMeter smartMeteringDevice = this.domainHelperService
+                .findSmartMeter(deviceMessageMetadata.getDeviceIdentification());
+
+        this.osgpCoreRequestMessageSender.send(new RequestMessage(deviceMessageMetadata.getCorrelationUid(),
+                        deviceMessageMetadata.getOrganisationIdentification(), deviceMessageMetadata.getDeviceIdentification(),
+                        smartMeteringDevice.getIpAddress(), requestDto), deviceMessageMetadata.getMessageType(),
+                deviceMessageMetadata.getMessagePriority(), deviceMessageMetadata.getScheduleTime());
+    }
+
+    public void handleSetDeviceLifecycleStatusResponse(final DeviceMessageMetadata deviceMessageMetadata,
+                                                                final ResponseMessageResultType result, final OsgpException osgpException,
+                                                                final SetDeviceLifecycleStatusResponseDto responseDto) {
+
+        LOGGER.info("handleSetDeviceLifecycleStatusResponse for MessageType: {}",
+                deviceMessageMetadata.getMessageType());
+
+        this.setDeviceLifecycleStatus(responseDto);
+
+        final String gatewayDeviceIdentification = deviceMessageMetadata.getDeviceIdentification();
+
+        final SetDeviceLifecycleStatusResponseData responseData = this.managementMapper.map(responseDto,
+                SetDeviceLifecycleStatusResponseData.class);
+
+        ResponseMessage responseMessage = ResponseMessage.newResponseMessageBuilder()
+                .withCorrelationUid(deviceMessageMetadata.getCorrelationUid())
+                .withOrganisationIdentification(deviceMessageMetadata.getOrganisationIdentification())
+                .withDeviceIdentification(gatewayDeviceIdentification).withResult(result)
+                .withOsgpException(osgpException).withDataObject(responseData)
+                .withMessagePriority(deviceMessageMetadata.getMessagePriority()).build();
+        this.webServiceResponseMessageSender.send(
+                responseMessage,
+                deviceMessageMetadata.getMessageType());
+    }
+
+    public void setDeviceLifecycleStatus(final SetDeviceLifecycleStatusResponseDto responseDto) {
+
+        final SmartMeter device = this.smartMeterRepository
+                .findByDeviceIdentification(responseDto.getDeviceIdentification());
+        device.setDeviceLifecycleStatus(DeviceLifecycleStatus.valueOf(responseDto.getDeviceLifecycleStatus().name()));
+        this.smartMeterRepository.save(device);
     }
 
     private void sendMetadataOnlyRequestMessage(final DeviceMessageMetadata deviceMessageMetadata)
