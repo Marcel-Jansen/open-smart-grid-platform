@@ -210,6 +210,20 @@ public class ManagementService {
         this.smartMeterRepository.save(mbusDevice);
     }
 
+    public void setDeviceLifecycleStatus(final SetDeviceLifecycleStatusResponseDto responseDto) {
+
+        final SmartMeter device = responseDto.getDeviceIdentification();
+        device.setDeviceLifecycleStatus(DeviceLifecycleStatus.valueOf(responseDto.getDeviceLifecycleStatus().name()));
+        this.smartMeterRepository.save(device);
+    }
+
+    public void disableDebugging(final DeviceMessageMetadata deviceMessageMetadata) throws FunctionalException {
+        LOGGER.info("DisableDebugging for organisationIdentification: {} for deviceIdentification: {}",
+                deviceMessageMetadata.getOrganisationIdentification(), deviceMessageMetadata.getDeviceIdentification());
+
+        this.sendMetadataOnlyRequestMessage(deviceMessageMetadata);
+    }
+
     private void sendMetadataOnlyRequestMessage(final DeviceMessageMetadata deviceMessageMetadata)
             throws FunctionalException {
         final SmartMeter smartMeteringDevice = this.domainHelperService
