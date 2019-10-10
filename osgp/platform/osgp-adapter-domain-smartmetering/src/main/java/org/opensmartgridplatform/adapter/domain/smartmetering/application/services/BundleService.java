@@ -7,15 +7,13 @@
  */
 package org.opensmartgridplatform.adapter.domain.smartmetering.application.services;
 
-import java.util.List;
-
 import org.opensmartgridplatform.adapter.domain.smartmetering.application.mapping.ConfigurationMapper;
 import org.opensmartgridplatform.adapter.domain.smartmetering.infra.jms.core.OsgpCoreRequestMessageSender;
 import org.opensmartgridplatform.adapter.domain.smartmetering.infra.jms.ws.WebServiceResponseMessageSender;
 import org.opensmartgridplatform.domain.core.entities.SmartMeter;
+import org.opensmartgridplatform.domain.core.valueobjects.FirmwareVersion;
 import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.BundleMessageRequest;
 import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.BundleMessagesResponse;
-import org.opensmartgridplatform.domain.core.valueobjects.smartmetering.FirmwareVersion;
 import org.opensmartgridplatform.dto.valueobjects.smartmetering.*;
 import org.opensmartgridplatform.shared.exceptionhandling.FunctionalException;
 import org.opensmartgridplatform.shared.exceptionhandling.OsgpException;
@@ -29,6 +27,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service(value = "domainSmartMeteringBundleService")
 @Transactional(value = "transactionManager")
@@ -106,9 +106,11 @@ public class BundleService {
                 .withCorrelationUid(deviceMessageMetadata.getCorrelationUid())
                 .withOrganisationIdentification(deviceMessageMetadata.getOrganisationIdentification())
                 .withDeviceIdentification(deviceMessageMetadata.getDeviceIdentification())
-                .withResult(responseMessageResultType).withOsgpException(osgpException)
+                .withResult(responseMessageResultType)
+                .withOsgpException(osgpException)
                 .withDataObject(bundleResponseMessageDataContainer)
-                .withMessagePriority(deviceMessageMetadata.getMessagePriority()).build();
+                .withMessagePriority(deviceMessageMetadata.getMessagePriority())
+                .build();
         this.webServiceResponseMessageSender.send(responseMessage, deviceMessageMetadata.getMessageType());
     }
 
